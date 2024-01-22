@@ -51,7 +51,7 @@ describe("AcademyV2", () => {
       await academy.connect(admin).addStudent("Alice", 20, student.address);
       await expect(
         academy.connect(admin).addStudent("Alice", 20, student.address)
-      ).to.be.revertedWith("Student already registered.");
+      ).to.be.revertedWithCustomError(academy, "StudentAlreadyRegistered");
     });
   });
 
@@ -79,7 +79,7 @@ describe("AcademyV2", () => {
           .payAndEnterAcademy("Alice", 20, student.address, {
             value: educationPrice.div(2),
           })
-      ).to.be.revertedWith("Not enough ether sent, to pay for education.");
+      ).to.be.revertedWithCustomError(academy, "NotEnoughEtherSentToPayForEducation");
 
       const addedStudent = await academy.students(student.address);
       expect(addedStudent.name).to.not.eq("Alice");
@@ -95,7 +95,7 @@ describe("AcademyV2", () => {
         academy.connect(admin).payAndEnterAcademy("Bob", 21, student.address, {
           value: educationPrice,
         })
-      ).to.be.revertedWith("Student already registered.");
+      ).to.be.revertedWithCustomError(academy, "StudentAlreadyRegistered");
     });
   });
 
@@ -148,7 +148,7 @@ describe("AcademyV2", () => {
 
       await expect(
         academy.connect(nonAdmin).exitAcademyAndRefundMoney()
-      ).to.be.revertedWith("Student doesn't exist!");
+      ).to.be.revertedWithCustomError(academy, "StudentDoesNotExist");
     });
 
     it("Should rejects exiting for already inactive student", async () => {
@@ -163,7 +163,7 @@ describe("AcademyV2", () => {
 
       await expect(
         academy.connect(student).exitAcademyAndRefundMoney()
-      ).to.be.revertedWith("Student already inactive.");
+      ).to.be.revertedWithCustomError(academy, "StudentAlreadyInactive");
     });
 
     it("Should emit event with zero amount on exit if student has not paid", async () => {
@@ -192,13 +192,13 @@ describe("AcademyV2", () => {
       expect(await academy.completionPercent(student.address)).to.be.eq(60);
     });
 
-    it("Should fail if student does not exist ", async () => {
+    it("Should fail if student does not exist", async () => {
       await academy.connect(admin).addStudent("Bob", 21, student.address);
       await expect(
         academy
           .connect(admin)
           .changeStudentsPerformance(nonAdmin.address, 10, 30)
-      ).to.be.revertedWith("Student doesn't exist!");
+      ).to.be.revertedWithCustomError(academy,"StudentDoesNotExist");
     });
 
     it("Should fail if non admin tries to change student perfomance", async () => {
@@ -255,14 +255,14 @@ describe("AcademyV2", () => {
 
       await expect(
         academy.connect(admin).sweepEther(ethers.constants.AddressZero)
-      ).to.be.revertedWith("Address 'to' cannot be zero.");
+      ).to.be.revertedWithCustomError(academy, "InvalidAddress");
     });
 
     it("Should fail if contract balance is zero", async () => {
       await academy.connect(admin).addStudent("Bob", 21, student.address);
       await expect(
         academy.connect(admin).sweepEther(admin.address)
-      ).to.be.revertedWith("No ether to sweep.");
+      ).to.be.revertedWithCustomError(academy, "NoEtherToSweep");
     });
   });
 
@@ -284,7 +284,7 @@ describe("AcademyV2", () => {
   it("Should reverts for non-existing student", async () => {
     await expect(
       academy.getAvgRatingOfStudent(student.address)
-    ).to.be.revertedWith("Student doesn't exist");
+    ).to.be.revertedWithCustomError(academy, "StudentDoesNotExist");
   });
 
   it("Should reverts if no marks", async () => {
@@ -292,6 +292,6 @@ describe("AcademyV2", () => {
 
     await expect(
       academy.getAvgRatingOfStudent(student.address)
-    ).to.be.revertedWith("No marks to calculate average");
+    ).to.be.revertedWithCustomError(academy, "NoMarksToCalculateAverage");
   });
 });

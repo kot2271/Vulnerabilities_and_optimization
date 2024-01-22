@@ -20,9 +20,6 @@ contract AcademyV2 is AccessControl, ReentrancyGuard {
         PaymentStatus paymentStatus;
     }
 
-    /// @dev Mapping to track if a student exists
-    mapping(address => bool) private studentExists;
-
     /// @dev Mapping to store student information
     mapping(address => Student) public students;
 
@@ -63,15 +60,44 @@ contract AcademyV2 is AccessControl, ReentrancyGuard {
     /// @dev Event emitted when Ether is swept from the contract
     event EtherSwept(address indexed to, uint256 amount);
 
+    /// @dev Error thrown when a student is already registered
+    error StudentAlreadyRegistered();
+
+    /// @dev Error thrown when a student doesn't exist
+    error StudentDoesNotExist();
+
+    /// @dev Error thrown when not enough ether is sent to pay for education
+    error NotEnoughEtherSentToPayForEducation();
+
+    /// @dev Error thrown when a student is already inactive
+    error StudentAlreadyInactive();
+
+    /// @dev Error thrown when a student fails to exit
+    error TransferFailed();
+
+    /// @dev Error thrown when an invalid address is sent
+    error InvalidAddress();
+
+    /// @dev Error thrown when no ether is sent to sweep
+    error NoEtherToSweep();
+
+    /// @dev Error thrown when a admin fails to send ether
+    error FailedToSendEther();
+
+    /// @dev Error thrown when no marks to calculate average
+    error NoMarksToCalculateAverage();
+
     /// @dev Modifier to check if a student doesn't exist
     modifier studentDoesNotExist(address studentAccount) {
-        require(!studentExists[studentAccount], "Student already registered.");
+        if (students[studentAccount].studentAccount != address(0))
+            revert StudentAlreadyRegistered();
         _;
     }
 
     /// @dev Modifier to check if a student exists
     modifier studentExist(address studentAccount) {
-        require(studentExists[studentAccount], "Student doesn't exist!");
+        if (students[studentAccount].studentAccount == address(0))
+            revert StudentDoesNotExist();
         _;
     }
 
@@ -107,10 +133,8 @@ contract AcademyV2 is AccessControl, ReentrancyGuard {
         uint8 age,
         address studentAccount
     ) external payable studentDoesNotExist(studentAccount) {
-        require(
-            msg.value == educationPrice,
-            "Not enough ether sent, to pay for education."
-        );
+        if (msg.value != educationPrice)
+            revert NotEnoughEtherSentToPayForEducation();
         _registerStudent(name, age, studentAccount, PaymentStatus.PAID);
     }
 
@@ -123,20 +147,16 @@ contract AcademyV2 is AccessControl, ReentrancyGuard {
         studentExist(msg.sender)
     {
         Student memory student = students[msg.sender];
-        require(
-            student.activeStatus == ActivStatus.ACTIVE,
-            "Student already inactive."
-        );
+        if (student.activeStatus == ActivStatus.INACTIVE)
+            revert StudentAlreadyInactive();
 
         uint256 amountToRepay = 0;
         if (student.paymentStatus == PaymentStatus.PAID) {
             amountToRepay = _calculateRefundAmount(
                 completionPercent[student.studentAccount]
             );
-            (bool success, ) = payable(msg.sender).call{value: amountToRepay}(
-                ""
-            );
-            require(success, "Transfer failed");
+            (bool success, ) = payable(msg.sender).call{value: amountToRepay}("");
+            if (!success) revert TransferFailed();
         }
         students[msg.sender].activeStatus = ActivStatus.INACTIVE;
         emit StudentExited(msg.sender, amountToRepay);
@@ -171,11 +191,11 @@ contract AcademyV2 is AccessControl, ReentrancyGuard {
      * @param to address to send ether
      */
     function sweepEther(address to) external nonReentrant onlyRole(ADMIN_ROLE) {
-        require(to != address(0), "Address 'to' cannot be zero.");
+        if (to == address(0)) revert InvalidAddress();
         uint256 balance = address(this).balance;
-        require(balance > 0, "No ether to sweep.");
+        if (balance <= 0) revert NoEtherToSweep();
         (bool success, ) = payable(to).call{value: balance}("");
-        require(success, "Failed to send ether.");
+        if (!success) revert FailedToSendEther();
         emit EtherSwept(to, balance);
     }
 
@@ -185,17 +205,16 @@ contract AcademyV2 is AccessControl, ReentrancyGuard {
      */
     function getAvgRatingOfStudent(
         address studentAccount
-    ) external view returns (uint256 avgRating) {
-        Student memory student = students[studentAccount];
-        require(student.studentAccount != address(0), "Student doesn't exist");
+    ) external view studentExist(studentAccount) returns (uint256 avgRating) {
         uint8[] memory studendMarks = marks[studentAccount];
-        require(studendMarks.length > 0, "No marks to calculate average");
+        uint studentMarksLength = studendMarks.length;
+        if (studentMarksLength <= 0) revert NoMarksToCalculateAverage();
 
         uint24 sumOfMarks;
-        for (uint16 i = 0; i < studendMarks.length; i++) {
+        for (uint16 i = 0; i < studentMarksLength; i++) {
             sumOfMarks += studendMarks[i];
         }
-        avgRating = (sumOfMarks * 10 ** 4) / studendMarks.length;
+        avgRating = (sumOfMarks * 10 ** 4) / studentMarksLength;
         return avgRating;
     }
 
@@ -212,16 +231,11 @@ contract AcademyV2 is AccessControl, ReentrancyGuard {
         address studentAccount,
         PaymentStatus paymentStatus
     ) internal {
-        Student memory newStudent = Student({
-            name: name,
-            age: age,
-            activeStatus: ActivStatus.ACTIVE,
-            studentAccount: studentAccount,
-            paymentStatus: paymentStatus
-        });
-
-        students[studentAccount] = newStudent;
-        studentExists[studentAccount] = true;
+        students[studentAccount].name = name;
+        students[studentAccount].age = age;
+        students[studentAccount].activeStatus = ActivStatus.ACTIVE;
+        students[studentAccount].studentAccount = studentAccount;
+        students[studentAccount].paymentStatus = paymentStatus;
         emit StudentAdded(studentAccount);
     }
 
