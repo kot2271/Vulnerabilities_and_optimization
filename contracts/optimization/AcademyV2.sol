@@ -128,19 +128,18 @@ contract AcademyV2 is AccessControl, ReentrancyGuard {
             "Student already inactive."
         );
 
+        uint256 amountToRepay = 0;
         if (student.paymentStatus == PaymentStatus.PAID) {
-            uint256 amountToRepay = _calculateRefundAmount(
+            amountToRepay = _calculateRefundAmount(
                 completionPercent[student.studentAccount]
             );
             (bool success, ) = payable(msg.sender).call{value: amountToRepay}(
                 ""
             );
             require(success, "Transfer failed");
-            emit StudentExited(msg.sender, amountToRepay);
-        } else {
-            emit StudentExited(msg.sender, 0);
         }
         students[msg.sender].activeStatus = ActivStatus.INACTIVE;
+        emit StudentExited(msg.sender, amountToRepay);
     }
 
     /**

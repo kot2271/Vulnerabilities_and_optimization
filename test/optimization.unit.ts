@@ -277,7 +277,6 @@ describe("AcademyV2", () => {
         .changeStudentsPerformance(student.address, 8, 70);
 
       const avg = await academy.getAvgRatingOfStudent(student.address);
-      console.log(`avg: ${avg.toString()}`);
       expect(avg).to.eq(90000); // ((10 + 8) * 10.000) / 2
     });
   });
